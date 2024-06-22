@@ -1,0 +1,60 @@
+#results {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    padding: 0px;
+    background: white;
+}
+
+.fullscreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    padding: 0px;
+    width: 100%;
+    height: 100%;
+}
+
+.fullscreen video, .fullscreen div {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0px;
+    z-index: 100;
+    padding: 0px;
+    border: 0px;
+}
+
+.fullscreen canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    padding: 0px;
+    border: 0px;
+}
+
+#navbar {
+    text-align: right;
+}
+
+#navbar input {
+    display: none;
+}
+
+#navbar label {
+    width: 200px;
+    height: 60px;
+    background-color: #f0f0f0;
+    display: inline-block;
+    text-align: center;
+    font-size: 40px;
+}
+
+/* label next to checked input */
+#navbar input:checked + label {
+    color: red;
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+  <meta charset="utf-8" />
+  <title>TensorFlow.js browser example</title>
+
+  <!-- Load TensorFlow.js from a script tag -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="/face-api.js/dist/face-api.js"></script>
+  <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+</head>
+
+<body>
+  <h1>TensorFlow.js example</h1>
+  <h2>Open the console to see the results.</h2>
+
+  <canvas id="canvas1" width="224" height="224" style="border: 2px solid;"></canvas>
+
+  <script>
+    const canvas1 = document.getElementById('canvas1');
+
+    // for example
+    const SIZE = 224;
+    const im = new Image()
+    im.src = "face.png";
+
+    // load trained mobilenet
+    const model_race = tf.loadLayersModel('./racejs/model.json');
+    model = undefined;
+    model_race.then(m => model = m);
+
+    function start() {
+      console.time("Loading Time");
+      example = tf.browser.fromPixels(im, 3);
+      tf.browser.toPixels(example.toFloat().div(tf.scalar(255.)), canvas1);
+      example = tf.image.resizeBilinear(example.expandDims(0), [SIZE, SIZE]).toFloat();
+      console.timeEnd("Loading Time");
+
+      console.time("Prediction Time");
+      prediction = model.predict(example);
+      console.log(prediction);
+      console.timeEnd("Prediction Time");
+
+      // convert webcam frame to tensor
+      input_frame = tf.browser.fromPixels(webcam, 3);
+      // input_frame = tf.image.resizeBilinear(input_frame, [SIZE, SIZE]).toFloat();
+      tf.browser.toPixels(input_frame.toFloat().div(tf.scalar(255.)), canvas1);
+      input_frame = input_frame.expandDims(0);
+
+    }
+
+    // capture webcam frame
+    const webcam = document.createElement('video');
+    webcam.width = SIZE;
+    webcam.height = SIZE;
+    webcam.autoplay = true;
+    document.body.appendChild(webcam);
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+      webcam.srcObject = stream;
+    });
+
+
+
+    /*
+    links:
+    https://github.com/6chaoran/TFjs-BMI-prediction/blob/main/index.js
+    https://github.com/serengil/deepface_models/releases/
+    https://github.com/tensorflow/tfjs-examples
+    resize and preview examples: https://humorous-silky-hacksaw.glitch.me/
+
+    performance of tensorflow.js:
+    https://www.reddit.com/r/MachineLearning/comments/azwrcd/d_what_is_the_performance_like_in_tensorflowjs_vs/
+      For 1024x1024 matmul I get
+      40 gflops with tensorflow.js and
+      330 gflops with real tensorflow
+    */
+
+
+  </script>
+
+  <button onclick="start()">Start</button>
+
+</body>
+
+</html>

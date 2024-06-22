@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    <meta charset="utf-8" />
+    <title>TensorFlow.js browser example</title>
+
+    <!-- Require the peer dependencies of body-segmentation. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+
+    <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation"></script>        
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/selfie-segmentation"></script>         -->
+
+    <!-- Load TensorFlow.js from a script tag -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.js"></script> -->
+    <script src="https://unpkg.dev/@vladmandic/face-api/dist/face-api.js"></script>
+
+    <!-- <script src="/face-api.js/dist/face-api.js"></script> -->
+    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2" crossorigin="anonymous"
+        type="module"></script>
+
+    <script src="/js/faceapi.js"></script>
+    <!-- <script src="/js/imagesegmenter.js"></script> -->
+
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+</head>
+
+<body>
+    <!-- <img id="inputImg" src="black.jpeg"/> -->
+    <div class="fullscreen" id="fullscreen">
+        <canvas id="initial_frame" style="border: 0px; visibility: hidden;"></canvas>
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="canvas" style="border: 0px;"></canvas>
+    </div>
+    <div class="fullscreen" id="navbar">
+        <br/>
+        <input type="radio" class="radio" value="male" name="sex" id="male" checked/><label for="male">Male</label><br/>
+        <input type="radio" class="radio" value="female" name="sex" id="female"/><label for="female">Female</label><br/>
+        <br/>
+        <input type="radio" class="radio" value="child" name="age" id="child"/><label for="child">Child</label><br/>
+        <input type="radio" class="radio" value="teen" name="age" id="teen"/><label for="teen">Teen</label><br/>
+        <input type="radio" class="radio" value="adult" name="age" id="adult" checked/><label for="adult">Adult</label><br/>
+        <input type="radio" class="radio" value="senior" name="age" id="senior"/><label for="senior">Senior</label><br/>
+        <br/>
+
+        <!-- <input type="radio" class="radio" value="white" name="race"/><label>White</label><br/>
+        <input type="radio" class="radio" value="white" name="race"/><label>White</label><br/>
+        <input type="radio" class="radio" value="white" name="race"/><label>White</label><br/>
+        <input type="radio" class="radio" value="white" name="race"/><label>White</label><br/>
+        <input type="radio" class="radio" value="white" name="race"/><label>White</label><br/> -->
+    
+        <button onclick="stopAll()">STOP IT!</button><br/>
+
+        <span id="results">
+        </span>
+
+    </div>
+
+    <!-- <script type="module"> -->
+    <script>
+        const ageMap = {
+            'child': [0, 10],
+            'teen': [10, 22],
+            'adult': [22, 50],
+            'senior': [50, 200]
+        }
+        const webcam = document.getElementById("webcam")
+        webcam.autoplay = true;
+        const canvas = $('#canvas')
+        const canvas_el = canvas.get(0)
+        const canvasCtx = canvas_el.getContext('2d')
+        const initialFrame = $('#initial_frame').get(0)
+        const initialCtx = initialFrame.getContext('2d', { willReadFrequently: true })
+        let lastTime;
+        let stopRequested = false;
+
+        //// capture webcam frame OR use debug video file
+        // navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        //     webcam.srcObject = stream;
+        // });
+
+        //// or debuggin video file
+        //// debug.mp4: one photo of multiple races
+        //// debug2.mp4: superslow on my computer because of the resolution
+        //// debug2_640x480.mp4: 640x480 resolution for faster processing
+        webcam.src = 'gray-cake-1.mov';
+        webcam.loop = true;
+        webcam.play();
+
+        let people = []; // segmentation results from bodypix
+        let faces = []; // faces with resized boxes to fit video element (most probably 640x480)
+
+        function setInitialPositions() {
+            // get video resolution
+            const videoWidth = webcam.videoWidth
+            const videoHeight = webcam.videoHeight
+
+            // set initial frame size to video resolution
+            initialFrame.width = videoWidth
+            initialFrame.height = videoHeight
+            console.log("initialFrame", initialFrame.width, initialFrame.height)
+
+            // set canvas width and left position to fit the video position on the fullscreen
+            const fullscreen = $('#fullscreen')
+            // set internal canvas resolution to webcam size
+            canvas_el.width = webcam.videoWidth
+            canvas_el.height = webcam.videoHeight
+
+            // but real canvas size to fullscreen size
+            canvas.width(fullscreen.width() * videoHeight / videoWidth - 25)
+            canvas.height(fullscreen.height())
+            // set left position to center the videobox
+            canvas.css('left', (fullscreen.width() - canvas.width()) / 2)
+        }
+
+        function setInitialFrame() {
+            // get real resolution of webcam
+            const videoWidth = webcam.videoWidth
+            const videoHeight = webcam.videoHeight
+
+            // set canvas resolution to webcam size
+            console.log("initialFrame", initialFrame.width, initialFrame.height)
+            const ctx = initialFrame.getContext('2d')
+            ctx.drawImage(webcam, 0, 0, videoWidth, videoHeight)
+        }
+
+        ///// SOLUTION FOR RACE DETECTOR: convert webcam frame to tensor
+        // input_frame = tf.browser.fromPixels(webcam, 3);
+        // input_frame = tf.image.resizeBilinear(input_frame, [SIZE, SIZE]).toFloat();
+        // tf.browser.toPixels(input_frame.toFloat().div(tf.scalar(255.)), canvas);
+        // input_frame = input_frame.expandDims(0)
+
+        async function updateResults() {
+            // await segmenterDraw()
+            await calculateFaces()
+
+            const opacity = 1;
+            const flipHorizontal = false;
+            const maskBlurAmount = 0;
+
+            const segmentationConfig = {
+                multiSegmentation: true,
+                segmentBodyParts: false,
+                flipHorizontal: false,
+                maxDetections: 5,
+                scoreThreshold: 0.2,
+                nmsRadius: 20
+            };
+            people = await segmenter.segmentPeople(webcam, segmentationConfig)
+            
+            // clear drawing context
+            canvasCtx.clearRect(0, 0, canvas_el.width, canvas_el.height);
+
+            var initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
+            var data = initialFrameData.data;
+            console.log('people=', people)
+            for (let i = 0; i < people.length; i++) {
+                const segment = people[i];
+                segmentData = segment.mask.mask.data;
+
+                // loop through people to match the box with the person
+                const person = segment
+                const imageData = person.mask.mask
+                // loop through faces list
+                for (let j = 0; j < faces.length; j++) {
+                    box = faces[j].detection.box
+                    let { x, y, width, height } = box
+                    x = Math.round(x)
+                    y = Math.round(y)
+                    width = Math.round(width)
+                    height = Math.round(height)
+                    // count all pixels having alpha channel non zero in the imageData
+                    let count = 0
+                    // but only for x, y, width, height of the box
+                    for (let i = x; i < x + width; i++) {
+                        for (let j = y; j < y + height; j++) {
+                            let address = (i + j * imageData.width) * 4 + 3
+                            if (imageData.data[address] > 0) {
+                                count++
+                            }
+                        }
+                    }
+                    prob = count / (width * height)
+                    // console.log('face number', j, count, width * height, prob, x, y, width, height, imageData.width, imageData.height)
+                    faces[j].prob = prob
+                    if (prob > 0.2) {
+                        people[i].face = faces[j]
+                    }
+                }
+                
+                const ageValue = ageMap[$('input[name=age]:checked').val()]
+                const sexValue = $('input[name=sex]:checked').val()
+                let drawBool = people[i].face && 
+                               ageValue[0] < people[i].face.age && 
+                               ageValue[1] > people[i].face.age && 
+                               sexValue == people[i].face.gender
+
+                const foregroundColor = {r: 255, g: 255, b: 255, a: 255};
+                const backgroundColor = {r: 0, g: 0, b: 0, a: 0};
+
+                // instead of drawMask we copy pixel by pixel the initial frame for masked pixels
+                let coloredPartImage = await bodySegmentation.toBinaryMask(people[i], foregroundColor, backgroundColor);
+                // bodySegmentation.drawMask(canvas_el, initialFrame, coloredPartImage, 0.5, maskBlurAmount, flipHorizontal);
+                if (drawBool) {
+                    for (let i = 0; i < segmentData.length; i += 4) {
+                        if (coloredPartImage.data[i + 3] !== 0) {
+                            coloredPartImage.data[i]     = data[i];     // red
+                            coloredPartImage.data[i + 1] = data[i + 1]; // green
+                            coloredPartImage.data[i + 2] = data[i + 2]; // blue
+                            coloredPartImage.data[i + 3] = data[i + 3]; // alpha
+                        } else {
+                            coloredPartImage.data[i] = 0;
+                            coloredPartImage.data[i + 1] = 0;
+                            coloredPartImage.data[i + 2] = 0;
+                            coloredPartImage.data[i + 3] = 0;
+                        }
+                    }
+                    canvasCtx.putImageData(
+                        coloredPartImage,
+                        0, 0,
+                        0, 0, canvas_el.width, canvas_el.height);
+                }
+            }
+
+            await faceapiDraw()
+
+            if (!stopRequested) {
+                // setTimeout(updateResults, 10)
+                window.requestAnimationFrame(updateResults);
+                // count fps from the last run of the function
+                if (lastTime) {
+                    // put fps info the results div
+                    console.log('fps', 1000 / (Date.now() - lastTime))
+                    $('#results').html('fps: ' + 1000 / (Date.now() - lastTime))
+                }
+                lastTime = Date.now()
+            }
+        }
+
+        let segmenter;
+
+        async function run() {
+            // load face detection and age and gender recognition models
+            // and load face landmark model for face alignment
+            await faceapiInit()
+            
+            /* BodyPix segmenter */
+            const model = bodySegmentation.SupportedModels.BodyPix;
+            const segmenterConfig = {
+                architecture: "MobileNetV1",
+                outputStride: 16,
+                internalResolution: "low",
+                multiplier: 0.5,
+                quantBytes: 1,
+            };
+            segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
+            // segmenter = await bodySegmentation.createSegmenter(bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation);
+
+            // start processing image
+            setTimeout(setInitialPositions, 1000)
+            setTimeout(setInitialFrame, 2000) // give time to webcam auto adjust brightness
+            setTimeout(updateResults, 3000)
+        }
+
+        function ageChange() {
+            console.log("ageChange", $('#ageSelect').val())
+        }
+
+        const legendColors = [
+            [255, 197, 0, 255], // Vivid Yellow
+            [128, 62, 117, 255], // Strong Purple
+            [255, 104, 0, 255], // Vivid Orange
+            [166, 189, 215, 255], // Very Light Blue
+            [193, 0, 32, 255], // Vivid Red
+            [206, 162, 98, 255], // Grayish Yellow
+            [129, 112, 102, 255], // Medium Gray
+            [0, 125, 52, 255], // Vivid Green
+            [246, 118, 142, 255], // Strong Purplish Pink
+            [0, 83, 138, 255], // Strong Blue
+            [255, 112, 92, 255], // Strong Yellowish Pink
+            [83, 55, 112, 255], // Strong Violet
+            [255, 142, 0, 255], // Vivid Orange Yellow
+            [179, 40, 81, 255], // Strong Purplish Red
+            [244, 200, 0, 255], // Vivid Greenish Yellow
+            [127, 24, 13, 255], // Strong Reddish Brown
+            [147, 170, 0, 255], // Vivid Yellowish Green
+            [89, 51, 21, 255], // Deep Yellowish Brown
+            [241, 58, 19, 255], // Vivid Reddish Orange
+            [35, 44, 22, 255], // Dark Olive Green
+            [0, 161, 194, 255] // Vivid Blue
+            ];
+
+        $(document).ready(function () {
+            run();
+        })
+
+        function stopAll() {
+            // webcam.srcObject.getTracks().forEach(track => track.stop());
+            stopRequested = true;
+        }
+    </script>
+    
+
+</body>
+
+</html>
