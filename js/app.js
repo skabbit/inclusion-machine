@@ -1,11 +1,16 @@
-const DEBUG = false
-let layers = ['segmenter', 'faceapi', 'races']
+// configuration variables
+const DEBUG = true;
+const LOW_QUALITY = true;
+// draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
+const USE_WEBCAM_CANVAS = true;
 const ageMap = {
     'child': [0, 10],
     'teen': [10, 22],
-    'adult': [22, 50],
-    'senior': [50, 200]
+    'adult': [22, 70],
+    'senior': [70, 200]
 }
+
+// cached elements
 const webcam = document.getElementById("webcam")
 webcam.autoplay = true;
 const canvas = $('#canvas')
@@ -13,11 +18,22 @@ const canvas_el = canvas.get(0)
 const canvasCtx = canvas_el.getContext('2d', { willReadFrequently: true })
 const initialFrame = $('#initial_frame').get(0)
 const initialCtx = initialFrame.getContext('2d', { willReadFrequently: true })
-let lastTime;
+const webcamFrame = $('#webcam_frame').get(0)
+const webcamCtx = webcamFrame.getContext('2d', { willReadFrequently: true })
+
+// Define constraints for the video resolution
+const webcamConstraints = {
+    video: {
+        width: { ideal: 1280 }, // Ideal width in pixels
+        height: { ideal: 720 }  // Ideal height in pixels
+    }
+};
+
+// control variables
+let previousFrameTime;
 let stopRequested = false;
 const opacity = 1;
 const flipHorizontal = false;
-const maskBlurAmount = 0;
 const segmentationConfig = {
     multiSegmentation: true,
     segmentBodyParts: false,
@@ -26,53 +42,7 @@ const segmentationConfig = {
     scoreThreshold: 0.2,
     nmsRadius: 20
 };
-
-async function testPerformance() {
-    let resulted_html = '';
-    const NUM = 10;
-
-    async function testFaceAPIPerformance() {
-        console.log('testFaceAPIPerformance')
-        const start = Date.now();
-        for (let i = 0; i < NUM; i++) {
-            let result = await faceapi.detectAllFaces(webcam, optionsSSDMobileNet)
-                // compute face landmarks to align faces for better accuracy
-                .withFaceLandmarks()
-                .withAgeAndGender();
-        }
-        const end = Date.now();
-        const time = end - start;
-        resulted_html += 'calculateFaces()<br>'
-        + 'time: ' + time + 'ms<br>' 
-        + NUM + ' iterations' + '<br>'
-        + 'average: ' + time / NUM + 'ms' + '<br>'
-        + 'fps: ' + 1000 / (time / NUM) + '<br><hr>';
-        return time;
-    }
-
-    async function testSegmenterPerformance() {
-        console.log('testSegmenterPerformance')
-        const start = Date.now();
-        for (let i = 0; i < NUM; i++) {
-            people = await segmenter.segmentPeople(webcam, segmentationConfig);
-        }
-        const end = Date.now();
-        const time = end - start;
-        resulted_html += 'testSegmenterPerformance()<br>'
-        + 'time: ' + time + 'ms<br>' 
-        + NUM + ' iterations' + '<br>'
-        + 'average: ' + time / NUM + 'ms' + '<br>'
-        + 'fps: ' + 1000 / (time / NUM) + '<br><hr>';
-        return time;
-    }
-
-    // test performance of the faceapi
-    const faceapiTime = await testFaceAPIPerformance();
-    const segmenterTime = await testSegmenterPerformance();
-
-    $('#results').html(resulted_html)
-    
-}
+let lastTimePerson = new Date(2020, 1, 1); // far past
 
 
 if (DEBUG) {
@@ -80,13 +50,22 @@ if (DEBUG) {
     //// debug.mp4: one photo of multiple races
     //// debug2.mp4: superslow on my computer because of the resolution
     //// debug2_640x480.mp4: 640x480 resolution for faster processing
-    $('#fullscreen').append('<video id="video" autoplay muted loop><source src="debug.mp4" type="video/mp4"></video>')
-
+    // $('#fullscreen').append('<video id="video" autoplay muted loop><source src="debug.mp4" type="video/mp4"></video>')
+    webcam.src = 'gray-cake-1.mov';
+    webcam.loop = true;
+    webcam.play();
+    $('#webcam_frame').css('visibility', 'show');
 } else {
-    //// capture webcam frame OR use debug video file
-    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    // capture webcam frame
+    navigator.mediaDevices.getUserMedia(webcamConstraints).then(stream => {
         webcam.srcObject = stream;
-    });
+        webcam.onloadedmetadata = () => {
+            console.log(`Actual video dimensions: ${webcam.videoWidth}x${webcam.videoHeight}`);
+        };        
+    }).catch(error => {
+        console.error('Error accessing webcam: ', error);
+        $('#results').html('Error accessing webcam: ' + error);
+    });;
 }
 
 let people = []; // segmentation results from bodypix
@@ -94,12 +73,18 @@ let faces = []; // faces with resized boxes to fit video element (most probably 
 
 function setInitialPositions() {
     // get video resolution
-    const videoWidth = webcam.videoWidth
-    const videoHeight = webcam.videoHeight
+    let videoWidth = webcam.videoWidth;
+    let videoHeight = webcam.videoHeight;
+    if (DEBUG) {
+        let videoWidth = webcam.videoWidth;
+        let videoHeight = webcam.videoHeight;
+    }
 
     // set initial frame size to video resolution
     initialFrame.width = videoWidth
     initialFrame.height = videoHeight
+    webcamFrame.width = videoWidth
+    webcamFrame.height = videoHeight
     console.log("initialFrame", initialFrame.width, initialFrame.height)
 
     // set canvas width and left position to fit the video position on the fullscreen
@@ -109,7 +94,7 @@ function setInitialPositions() {
     canvas_el.height = webcam.videoHeight
 
     // but real canvas size to fullscreen size
-    canvas.width(fullscreen.width() * videoHeight / videoWidth - 25)
+    canvas.width(fullscreen.height() * videoWidth / videoHeight)
     canvas.height(fullscreen.height())
     // set left position to center the videobox
     canvas.css('left', (fullscreen.width() - canvas.width()) / 2)
@@ -122,8 +107,7 @@ function setInitialFrame() {
 
     // set canvas resolution to webcam size
     console.log("initialFrame", initialFrame.width, initialFrame.height)
-    const ctx = initialFrame.getContext('2d')
-    ctx.drawImage(webcam, 0, 0, videoWidth, videoHeight)
+    initialCtx.drawImage(webcam, 0, 0, videoWidth, videoHeight)
 }
 
 ///// SOLUTION FOR RACE DETECTOR: convert webcam frame to tensor
@@ -140,9 +124,14 @@ async function updateResults() {
     // clear drawing context
     canvasCtx.clearRect(0, 0, canvas_el.width, canvas_el.height);
 
+    // put webcam frame to the canvas
+    webcamCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
+    var webcamData = webcamCtx.getImageData(0, 0, webcam.videoWidth, webcam.videoHeight);
+    
+    // TODO we can do it once in setInitialFrame
     var initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
     var data = initialFrameData.data;
-    console.log('people=', people)
+
     for (let i = 0; i < people.length; i++) {
         const segment = people[i];
         segmentData = segment.mask.mask.data;
@@ -189,48 +178,68 @@ async function updateResults() {
 
         // instead of drawMask we copy pixel by pixel the initial frame for masked pixels
         let coloredPartImage = await bodySegmentation.toBinaryMask(people[i], foregroundColor, backgroundColor);
-        // bodySegmentation.drawMask(canvas_el, initialFrame, coloredPartImage, 0.5, maskBlurAmount, flipHorizontal);
 
         if (drawBool) {
             for (let i = 0; i < segmentData.length; i += 4) {
                 if (coloredPartImage.data[i + 3] !== 0) {
-                    coloredPartImage.data[i]     = data[i];     // red
-                    coloredPartImage.data[i + 1] = data[i + 1]; // green
-                    coloredPartImage.data[i + 2] = data[i + 2]; // blue
-                    coloredPartImage.data[i + 3] = data[i + 3]; // alpha
+                    if (USE_WEBCAM_CANVAS) {
+                        webcamData.data[i]     = data[i];     // red
+                        webcamData.data[i + 1] = data[i + 1]; // green
+                        webcamData.data[i + 2] = data[i + 2]; // blue
+                        webcamData.data[i + 3] = data[i + 3]; // alpha
+                    } else {
+                        coloredPartImage.data[i]     = data[i];     // red
+                        coloredPartImage.data[i + 1] = data[i + 1]; // green
+                        coloredPartImage.data[i + 2] = data[i + 2]; // blue
+                        coloredPartImage.data[i + 3] = data[i + 3]; // alpha
+                    }
                 } else {
-                    coloredPartImage.data[i] = 0;
-                    coloredPartImage.data[i + 1] = 0;
-                    coloredPartImage.data[i + 2] = 0;
-                    coloredPartImage.data[i + 3] = 0;
+                    if (USE_WEBCAM_CANVAS) {} else {
+                        // transparent
+                        coloredPartImage.data[i] = 0;
+                        coloredPartImage.data[i + 1] = 0;
+                        coloredPartImage.data[i + 2] = 0;
+                        coloredPartImage.data[i + 3] = 0;
+                    }
                 }
             }
-            canvasCtx.putImageData(
-                coloredPartImage,
-                0, 0,
-                0, 0, canvas_el.width, canvas_el.height);
+            // draw each person mask on the empty canvas
+            if (!USE_WEBCAM_CANVAS) {
+                canvasCtx.putImageData(
+                    coloredPartImage,
+                    0, 0,
+                    0, 0, canvas_el.width, canvas_el.height);
+            }
         }
     }
 
+    if (USE_WEBCAM_CANVAS) {
+        canvasCtx.putImageData(
+            webcamData,
+            0, 0,
+            0, 0, canvas_el.width, canvas_el.height);
+    }
+
     if (window.calcRace === undefined) {
-        console.log("calcRace is undefined")
+        // console.log("calcRace is undefined")
     } else {
         await calcRace()
     }
     await boxesDraw()
 
-    if (DEBUG) stopRequested = true
+    // if (DEBUG) stopRequested = true
 
     if (!stopRequested) {
         // setTimeout(updateResults, 10)
         window.requestAnimationFrame(updateResults);
         // count fps from the last run of the function
-        if (lastTime) {
+        if (previousFrameTime) {
             // put fps info the results div
-            console.log('fps', 1000 / (Date.now() - lastTime))
-            $('#results').html('fps: ' + 1000 / (Date.now() - lastTime))
+            // console.log('fps', 1000 / (Date.now() - lastTime))
+            text = 'fps: ' + 1000 / (Date.now() - previousFrameTime)
+            $('#results').html('fps: ' + 1000 / (Date.now() - previousFrameTime))
         }
-        lastTime = Date.now()
+        previousFrameTime = Date.now()
     }
 }
 
@@ -260,13 +269,24 @@ async function run() {
 
 async function loadSegmenter() {
     const model = bodySegmentation.SupportedModels.BodyPix;
-    const segmenterConfig = {
-        architecture: "MobileNetV1",
-        outputStride: 16,
-        internalResolution: "low",
-        multiplier: 0.5,
-        quantBytes: 1,
-    };
+    let segmenterConfig;
+    if (LOW_QUALITY) {
+        segmenterConfig = {
+            architecture: "MobileNetV1",
+            outputStride: 16,
+            internalResolution: "low",
+            multiplier: 0.5,
+            quantBytes: 1,
+        };
+    } else {
+        segmenterConfig = {
+            architecture: "ResNet50",
+            outputStride: 16,
+            internalResolution: "full",
+            multiplier: 1,
+            quantBytes: 4,
+        };
+    }
     segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
 }
 

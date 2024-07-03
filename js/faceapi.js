@@ -4,7 +4,7 @@ const inputImgEl = $('#inputImg').get(0)
 // SsdMobilenetv1Options works slower, but much better
 let optionsTinyFace = new faceapi.TinyFaceDetectorOptions({
     // inputSize: 640,
-    scoreThreshold: 0.2 })
+    scoreThreshold: 0.1 })
 let optionsSSDMobileNet = new faceapi.SsdMobilenetv1Options({
     minConfidence: 0.2,
     maxResults: 5 });
@@ -14,7 +14,7 @@ async function calculateFaces() {
     // compute face landmarks to align faces for better accuracy
     .withFaceLandmarks()
     .withAgeAndGender()
-    console.log('results=', results)
+    // console.log('results=', results)
     faces = await faceapi.resizeResults(results, canvas_el)
 }
 
