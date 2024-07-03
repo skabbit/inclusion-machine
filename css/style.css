@@ -47,11 +47,13 @@
 
 #navbar label {
     width: 200px;
-    height: 60px;
+    height: 50px;
     background-color: #f0f0f0;
     display: inline-block;
     text-align: center;
-    font-size: 40px;
+    font-size: 20px;
+    line-height: 50px;
+    vertical-align: baseline;
 }
 
 /* label next to checked input */
