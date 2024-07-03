@@ -34,15 +34,44 @@ let previousFrameTime;
 let stopRequested = false;
 const opacity = 1;
 const flipHorizontal = false;
-const segmentationConfig = {
-    multiSegmentation: true,
-    segmentBodyParts: false,
-    flipHorizontal: false,
-    maxDetections: 5,
-    scoreThreshold: 0.2,
-    nmsRadius: 20
-};
 let lastTimePerson = new Date(2020, 1, 1); // far past
+
+// segmentation configuration
+let segmentationConfig;
+let segmenterConfig;
+if (LOW_QUALITY) {
+    segmentationConfig = {
+        multiSegmentation: true,
+        segmentBodyParts: false,
+        flipHorizontal: false,
+        maxDetections: 5,
+        scoreThreshold: 0.2,
+        nmsRadius: 20,
+        internalResolution: 'low',
+    };    
+    segmenterConfig = {
+        architecture: "MobileNetV1",
+        outputStride: 8,
+        multiplier: 0.5,
+        quantBytes: 1,
+    };
+} else {
+    segmentationConfig = {
+        multiSegmentation: true,
+        segmentBodyParts: false,
+        flipHorizontal: false,
+        maxDetections: 10,
+        scoreThreshold: 0.1,
+        nmsRadius: 20,
+        internalResolution: 'full',
+    };
+    segmenterConfig = {
+        architecture: "ResNet50",
+        outputStride: 16,
+        multiplier: 1,
+        quantBytes: 4,
+    };
+}
 
 
 if (DEBUG) {
@@ -269,24 +298,6 @@ async function run() {
 
 async function loadSegmenter() {
     const model = bodySegmentation.SupportedModels.BodyPix;
-    let segmenterConfig;
-    if (LOW_QUALITY) {
-        segmenterConfig = {
-            architecture: "MobileNetV1",
-            outputStride: 16,
-            internalResolution: "low",
-            multiplier: 0.5,
-            quantBytes: 1,
-        };
-    } else {
-        segmenterConfig = {
-            architecture: "ResNet50",
-            outputStride: 16,
-            internalResolution: "full",
-            multiplier: 1,
-            quantBytes: 4,
-        };
-    }
     segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
 }
 
