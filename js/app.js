@@ -1,6 +1,6 @@
 // configuration variables
 const DEBUG = false;
-const LOW_QUALITY = false;
+const LOW_QUALITY = true;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
 const USE_WEBCAM_CANVAS = true;
 const USE_BUFFER = true;
@@ -23,28 +23,40 @@ const initialFrame = document.createElement('canvas');
 const initialCtx = initialFrame.getContext('2d', { willReadFrequently: true })
 const initialFrameDelayed = document.createElement('canvas');
 const initialCtxDelayed = initialFrame.getContext('2d', { willReadFrequently: true })
-const webcamFrame = document.createElement('canvas');
-const webcamCtx = webcamFrame.getContext('2d', { willReadFrequently: true })
+const webcamCanvas = document.createElement('canvas');
+const webcamCtx = webcamCanvas.getContext('2d', { willReadFrequently: true })
 
 // Define constraints for the video resolution
-const webcamConstraints = {
+let webcamConstraints = {
     video: {
         width: { ideal: 1280 }, // Ideal width in pixels
         height: { ideal: 720 }  // Ideal height in pixels
     }
 };
+if (LOW_QUALITY) {
+    webcamConstraints = {
+        video: {
+            width: { ideal: 640 }, // Ideal width in pixels
+            height: { ideal: 480 }  // Ideal height in pixels
+        }
+    };
+}
 
 // control variables
 let people = []; // segmentation results from bodypix
 let faces = []; // faces with resized boxes to fit video element (most probably 640x480)
 let peopleBuffer = []; // segmentation results from bodypix
 let facesBuffer = []; // faces with resized boxes to fit video element (most probably 640x480)
+let initialFrameData;
 let previousFrameTime;
 let stopRequested = false;
 let initialized = false;
 const opacity = 1;
 const flipHorizontal = false;
 let lastTimePerson = new Date(2020, 1, 1); // far past
+
+// performance measures
+let performanceTimes = {};
 
 // segmentation configuration
 let segmentationConfig;
@@ -122,8 +134,8 @@ function setInitialPositions() {
     // set initial frame size to video resolution
     initialFrame.width = videoWidth
     initialFrame.height = videoHeight
-    webcamFrame.width = videoWidth
-    webcamFrame.height = videoHeight
+    webcamCanvas.width = videoWidth
+    webcamCanvas.height = videoHeight
     initialFrameDelayed.width = videoWidth
     initialFrameDelayed.height = videoHeight
     console.log("initialFrame", initialFrame.width, initialFrame.height)
@@ -152,6 +164,7 @@ function setInitialFrame() {
 // input_frame = input_frame.expandDims(0)
 
 async function updateResults() {
+    let timeStart;
     if (!initialized) {
         console.log("not initialized")
         setTimeout(updateResults, 1000)
@@ -162,25 +175,32 @@ async function updateResults() {
     const sexValue = $('input[name=sex]:checked').val()
 
     // put webcam frame to the canvas
+    timeStart = performance.now();
     webcamCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
     var webcamData = webcamCtx.getImageData(0, 0, webcam.videoWidth, webcam.videoHeight);
+    performanceTimes['webcamCtx.drawImage'] = performance.now() - timeStart
     
+    timeStart = performance.now();
     try {
-        await calculateFaces()
+        await calculateFaces(webcamCanvas)
     } catch (error) {
         console.error('Error calculating faces: ', error);
         $('#results').html('Error calculating faces: ' + error);
         window.requestAnimationFrame(updateResults);
         return
     }
+    performanceTimes['calculateFaces'] = performance.now() - timeStart
 
-    people = await segmenter.segmentPeople(webcam, segmentationConfig)
+    timeStart = performance.now();
+    people = await segmenter.segmentPeople(webcamCanvas, segmentationConfig)
+    performanceTimes['segmenter.segmentPeople'] = performance.now() - timeStart
 
     // reset initial frame if there are no people found for a long time (5 seconds)
     if (people.length == 0) {
         if (Date.now() - lastTimePerson > 3000) {
             console.log('updating initial frame with empty space')
             initialCtx.drawImage(initialFrameDelayed, 0, 0, webcam.videoWidth, webcam.videoHeight)
+            initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
             initialCtxDelayed.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
             lastTimePerson = Date.now()
         }
@@ -188,6 +208,7 @@ async function updateResults() {
         lastTimePerson = Date.now()
     }
 
+    timeStart = performance.now();
     // check buffer and compare with current
     if (USE_BUFFER) {
         newFaces = faces
@@ -233,15 +254,17 @@ async function updateResults() {
     } else {
         allFaces = faces
     }
+    performanceTimes['check buffer'] = performance.now() - timeStart
 
     // clear drawing context
+    timeStart = performance.now();
     canvasCtx.clearRect(0, 0, canvas_el.width, canvas_el.height);
+    performanceTimes['canvasCtx.clearRect'] = performance.now() - timeStart
 
-    // TODO we can do it once in setInitialFrame
-    var initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
     var data = initialFrameData.data;
 
     // loop through faces list
+    timeStart = performance.now();
     for (let j = 0; j < allFaces.length; j++) {
         let face = allFaces[j]
         face.prob = 0
@@ -337,20 +360,23 @@ async function updateResults() {
             }
         }
     }
+    performanceTimes['exclude people'] = performance.now() - timeStart
 
+    timeStart = performance.now();
     if (USE_WEBCAM_CANVAS) {
         canvasCtx.putImageData(
             webcamData,
             0, 0,
             0, 0, canvas_el.width, canvas_el.height);
     }
+    performanceTimes['draw webcam canvas'] = performance.now() - timeStart
 
     if (window.calcRace === undefined) {
         // console.log("calcRace is undefined")
     } else {
         await calcRace()
     }
-    await boxesDraw()
+    // await boxesDraw()
 
     // if (DEBUG) stopRequested = true
 
@@ -364,6 +390,8 @@ async function updateResults() {
             // console.log('fps', 1000 / (Date.now() - lastTime))
             text = 'fps: ' + 1000 / (Date.now() - previousFrameTime)
             text += '<br> persons: ' + facesBuffer.length
+            // add performance times results
+            text += 
             $('#results').html(text)
         }
         previousFrameTime = Date.now()
@@ -383,8 +411,6 @@ async function run() {
         await loadRaceModels()
     }
 
-    $('#navbar').append('')
-
     /* BodyPix segmenter */
     await loadSegmenter()
 
@@ -397,16 +423,7 @@ async function loadSegmenter() {
     segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
 }
 
-function ageChange() {
-    console.log("ageChange", $('#ageSelect').val())
-}
-
-
 async function boxesDraw() {
-
-    // // clear canvas
-    // canvas_el.getContext('2d').clearRect(0, 0, canvas_el.width, canvas_el.height)
-
     for (let i = 0; i < faces.length; i++) {
         const result_resized = faces[i]
         drawBox(canvas, result_resized, true)
@@ -440,11 +457,11 @@ function drawBox(canvas, result_resized, withScore = false) {
     }
 }
 
+function stopAll() {
+    stopRequested = true;
+}
+
 $(document).ready(function () {
     run();
 })
 
-function stopAll() {
-    // webcam.srcObject.getTracks().forEach(track => track.stop());
-    stopRequested = true;
-}

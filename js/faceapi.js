@@ -8,10 +8,10 @@ let optionsSSDMobileNet = new faceapi.SsdMobilenetv1Options({
     minConfidence: 0.2,
     maxResults: 5 });
 
-async function calculateFaces() {
+async function calculateFaces(webcamCanvas) {
     let results;
     // compute face landmarks to align faces for better accuracy
-    results = await faceapi.detectAllFaces(webcam, optionsSSDMobileNet)
+    results = await faceapi.detectAllFaces(webcamCanvas, optionsSSDMobileNet)
         .withFaceLandmarks()
         .withAgeAndGender()
 
