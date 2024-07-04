@@ -1,10 +1,9 @@
 /* face-api.js face detector with age and gender */
-const inputImgEl = $('#inputImg').get(0)
 
 // SsdMobilenetv1Options works slower, but much better
 let optionsTinyFace = new faceapi.TinyFaceDetectorOptions({
     // inputSize: 640,
-    scoreThreshold: 0.1 })
+    scoreThreshold: 0.2 })
 let optionsSSDMobileNet = new faceapi.SsdMobilenetv1Options({
     minConfidence: 0.2,
     maxResults: 5 });

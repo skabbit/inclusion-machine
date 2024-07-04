@@ -1,8 +1,11 @@
 // configuration variables
 const DEBUG = true;
-const LOW_QUALITY = true;
+const LOW_QUALITY = false;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
 const USE_WEBCAM_CANVAS = true;
+const USE_BUFFER = true;
+const MIN_MATCH_PROPORTION = 0.2;
+
 const ageMap = {
     'child': [0, 10],
     'teen': [10, 22],
@@ -30,8 +33,13 @@ const webcamConstraints = {
 };
 
 // control variables
+let people = []; // segmentation results from bodypix
+let faces = []; // faces with resized boxes to fit video element (most probably 640x480)
+let peopleBuffer = []; // segmentation results from bodypix
+let facesBuffer = []; // faces with resized boxes to fit video element (most probably 640x480)
 let previousFrameTime;
 let stopRequested = false;
+let initialized = false;
 const opacity = 1;
 const flipHorizontal = false;
 let lastTimePerson = new Date(2020, 1, 1); // far past
@@ -90,6 +98,9 @@ if (DEBUG) {
         webcam.srcObject = stream;
         webcam.onloadedmetadata = () => {
             console.log(`Actual video dimensions: ${webcam.videoWidth}x${webcam.videoHeight}`);
+            setInitialPositions();
+            setInitialFrame();
+            initialized = true;
         };        
     }).catch(error => {
         console.error('Error accessing webcam: ', error);
@@ -97,17 +108,10 @@ if (DEBUG) {
     });;
 }
 
-let people = []; // segmentation results from bodypix
-let faces = []; // faces with resized boxes to fit video element (most probably 640x480)
-
 function setInitialPositions() {
     // get video resolution
     let videoWidth = webcam.videoWidth;
     let videoHeight = webcam.videoHeight;
-    if (DEBUG) {
-        let videoWidth = webcam.videoWidth;
-        let videoHeight = webcam.videoHeight;
-    }
 
     // set initial frame size to video resolution
     initialFrame.width = videoWidth
@@ -135,7 +139,6 @@ function setInitialFrame() {
     const videoHeight = webcam.videoHeight
 
     // set canvas resolution to webcam size
-    console.log("initialFrame", initialFrame.width, initialFrame.height)
     initialCtx.drawImage(webcam, 0, 0, videoWidth, videoHeight)
 }
 
@@ -146,10 +149,81 @@ function setInitialFrame() {
 // input_frame = input_frame.expandDims(0)
 
 async function updateResults() {
+    if (!initialized) {
+        console.log("not initialized")
+        setTimeout(updateResults, 1000)
+        return
+    }
     // await segmenterDraw()
-    await calculateFaces()
+    const ageValue = ageMap[$('input[name=age]:checked').val()]
+    const sexValue = $('input[name=sex]:checked').val()
+    try {
+        await calculateFaces()
+    } catch (error) {
+        console.error('Error calculating faces: ', error);
+        $('#results').html('Error calculating faces: ' + error);
+        window.requestAnimationFrame(updateResults);
+        return
+    }
+    
     people = await segmenter.segmentPeople(webcam, segmentationConfig)
     
+    // reset initial frame if there are no faces found for a long time (5 seconds)
+    if (faces.length == 0) {
+        if (Date.now() - lastTimePerson > 1000) {
+            console.log('updating initial frame with empty space')
+            setInitialFrame();
+        }
+    } else {
+        lastTimePerson = Date.now()
+    }
+
+    // check buffer and compare with current
+    if (USE_BUFFER) {
+        newFaces = faces
+        for (let i = 0; i < newFaces.length; i++) {
+            newFace = newFaces[i]
+            newFace.bufferProb = 0
+            newFace.framesWithoutMatch = 0
+            newFace.bufferFace = null
+            newFace.ageList = [newFace.age]
+            newFace.genderList = [newFace.gender]
+            newFace.segmentation = null
+            let box1 = newFace.detection.box
+            for (let j = 0; j < facesBuffer.length; j++) {
+                let box2 = facesBuffer[j].detection.box
+                // count how many pixels overlap
+                let overlap = Math.max(0, Math.min(box1.x + box1.width, box2.x + box2.width) - Math.max(box1.x, box2.x)) *
+                              Math.max(0, Math.min(box1.y + box1.height, box2.y + box2.height) - Math.max(box1.y, box2.y))
+                let proportion = overlap / (box1.width * box1.height)
+                if (proportion > MIN_MATCH_PROPORTION && proportion > newFace.bufferProb) {
+                    newFace.bufferProb = proportion
+                    newFace.bufferFace = facesBuffer[j]
+                    facesBuffer[j].newFace = newFace
+                }
+            }
+            if (newFace.bufferFace) {
+                // concatenate age list and set average age
+                newFace.ageList = newFace.ageList.concat(newFace.bufferFace.ageList)
+                newFace.age = newFace.ageList.reduce((a, b) => a + b, 0) / newFace.ageList.length
+                newFace.genderList = newFace.genderList.concat(newFace.bufferFace.genderList)
+                // set most frequent gender from the list
+                newFace.gender = newFace.genderList.reduce((a, b, i, arr) =>
+                    (arr.filter(v => v === a).length >= arr.filter(v => v === b).length ? a : b), null)
+            }
+        }
+        // all faces = newFaces + facesBuffer without newFace set if 
+        allFaces = newFaces
+        for (let i = 0; i < facesBuffer.length; i++) {
+            if (!facesBuffer[i].newFace && facesBuffer[i].framesWithoutMatch < 5) {
+                facesBuffer[i].framesWithoutMatch++;
+                allFaces.push(facesBuffer[i])
+            }
+        }
+    } else {
+        allFaces = faces
+    }
+
     // clear drawing context
     canvasCtx.clearRect(0, 0, canvas_el.width, canvas_el.height);
 
@@ -161,24 +235,26 @@ async function updateResults() {
     var initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
     var data = initialFrameData.data;
 
-    for (let i = 0; i < people.length; i++) {
-        const segment = people[i];
-        segmentData = segment.mask.mask.data;
+    // loop through faces list
+    for (let j = 0; j < allFaces.length; j++) {
+        let face = allFaces[j]
+        face.prob = 0
+        let box = face.detection.box
+        let { x, y, width, height } = box
+        // round the box coordinates to integers
+        x = Math.round(x)
+        y = Math.round(y)
+        width = Math.round(width)
+        height = Math.round(height)
+    
+        // loop through people segmentation to match the face box with the person mask
+        for (let i = 0; i < people.length; i++) {
+            const person = people[i]
+            const imageData = person.mask.mask
 
-        // loop through people to match the box with the person
-        const person = segment
-        const imageData = person.mask.mask
-        // loop through faces list
-        for (let j = 0; j < faces.length; j++) {
-            box = faces[j].detection.box
-            let { x, y, width, height } = box
-            x = Math.round(x)
-            y = Math.round(y)
-            width = Math.round(width)
-            height = Math.round(height)
             // count all pixels having alpha channel non zero in the imageData
-            let count = 0
             // but only for x, y, width, height of the box
+            let count = 0
             for (let i = x; i < x + width; i++) {
                 for (let j = y; j < y + height; j++) {
                     let address = (i + j * imageData.width) * 4 + 3
@@ -188,27 +264,33 @@ async function updateResults() {
                 }
             }
             prob = count / (width * height)
-            // console.log('face number', j, count, width * height, prob, x, y, width, height, imageData.width, imageData.height)
-            faces[j].prob = prob
             if (prob > 0.2) {
-                people[i].face = faces[j]
+                if (prob > face.prob) {
+                    face.segmentation = person
+                    face.prob = prob
+                }
             }
         }
+
+        if (face.segmentation === null) {
+            // if there is no segmentation mask for the face, set from the buffer
+            face.segmentation = face.bufferFace ? face.bufferFace.segmentation : null
+        }
         
-        const ageValue = ageMap[$('input[name=age]:checked').val()]
-        const sexValue = $('input[name=sex]:checked').val()
-        let drawBool = people[i].face && 
-                       ageValue[0] < people[i].face.age && 
-                       ageValue[1] > people[i].face.age && 
-                       sexValue == people[i].face.gender
-
-        const foregroundColor = {r: 255, g: 255, b: 255, a: 255};
-        const backgroundColor = {r: 0, g: 0, b: 0, a: 0};
-
-        // instead of drawMask we copy pixel by pixel the initial frame for masked pixels
-        let coloredPartImage = await bodySegmentation.toBinaryMask(people[i], foregroundColor, backgroundColor);
+        // do we need to exclude the person from the image
+        let drawBool = face.segmentation && 
+                       ageValue[0] < face.age && 
+                       ageValue[1] > face.age && 
+                       sexValue == face.gender
 
         if (drawBool) {
+            const segmentData = face.segmentation.mask.mask.data;
+            const foregroundColor = {r: 255, g: 255, b: 255, a: 255};
+            const backgroundColor = {r: 0, g: 0, b: 0, a: 0};
+    
+            // instead of drawMask we copy pixel by pixel the initial frame for masked pixels
+            let coloredPartImage = await bodySegmentation.toBinaryMask(face.segmentation, foregroundColor, backgroundColor);
+
             for (let i = 0; i < segmentData.length; i += 4) {
                 if (coloredPartImage.data[i + 3] !== 0) {
                     if (USE_WEBCAM_CANVAS) {
@@ -260,13 +342,15 @@ async function updateResults() {
 
     if (!stopRequested) {
         // setTimeout(updateResults, 10)
+        facesBuffer = faces;
         window.requestAnimationFrame(updateResults);
         // count fps from the last run of the function
         if (previousFrameTime) {
             // put fps info the results div
             // console.log('fps', 1000 / (Date.now() - lastTime))
             text = 'fps: ' + 1000 / (Date.now() - previousFrameTime)
-            $('#results').html('fps: ' + 1000 / (Date.now() - previousFrameTime))
+            text += '<br> persons: ' + facesBuffer.length
+            $('#results').html(text)
         }
         previousFrameTime = Date.now()
     }
@@ -291,9 +375,9 @@ async function run() {
     await loadSegmenter()
 
     // start processing image
-    setTimeout(setInitialPositions, 1000)
-    setTimeout(setInitialFrame, 2000) // give time to webcam auto adjust brightness
-    setTimeout(updateResults, 3000)
+    // setTimeout(setInitialPositions, 1000)
+    // setTimeout(setInitialFrame, 2000) // give time to webcam auto adjust brightness
+    updateResults();
 }
 
 async function loadSegmenter() {
@@ -305,29 +389,6 @@ function ageChange() {
     console.log("ageChange", $('#ageSelect').val())
 }
 
-const legendColors = [
-    [255, 197, 0, 255], // Vivid Yellow
-    [128, 62, 117, 255], // Strong Purple
-    [255, 104, 0, 255], // Vivid Orange
-    [166, 189, 215, 255], // Very Light Blue
-    [193, 0, 32, 255], // Vivid Red
-    [206, 162, 98, 255], // Grayish Yellow
-    [129, 112, 102, 255], // Medium Gray
-    [0, 125, 52, 255], // Vivid Green
-    [246, 118, 142, 255], // Strong Purplish Pink
-    [0, 83, 138, 255], // Strong Blue
-    [255, 112, 92, 255], // Strong Yellowish Pink
-    [83, 55, 112, 255], // Strong Violet
-    [255, 142, 0, 255], // Vivid Orange Yellow
-    [179, 40, 81, 255], // Strong Purplish Red
-    [244, 200, 0, 255], // Vivid Greenish Yellow
-    [127, 24, 13, 255], // Strong Reddish Brown
-    [147, 170, 0, 255], // Vivid Yellowish Green
-    [89, 51, 21, 255], // Deep Yellowish Brown
-    [241, 58, 19, 255], // Vivid Reddish Orange
-    [35, 44, 22, 255], // Dark Olive Green
-    [0, 161, 194, 255] // Vivid Blue
-    ];
 
 async function boxesDraw() {
 
@@ -336,15 +397,6 @@ async function boxesDraw() {
 
     for (let i = 0; i < faces.length; i++) {
         const result_resized = faces[i]
-        // const result = results[i]
-        // copy this box content from initial frame to canvas,
-        // const { x, y, width, height } = result_resized.detection.box
-        // const box = result.detection.box
-        // const ctx = canvas_el.getContext('2d')
-        // ctx.drawImage(initialFrame,
-        //     box.x, box.y, box.width, box.height,
-        //     x, y, width, height,
-        // )
         drawBox(canvas, result_resized, true)
     }
 }
