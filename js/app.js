@@ -1,5 +1,5 @@
 // configuration variables
-const DEBUG = true;
+const DEBUG = false;
 const LOW_QUALITY = false;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
 const USE_WEBCAM_CANVAS = true;
