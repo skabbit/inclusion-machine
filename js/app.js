@@ -7,10 +7,10 @@ const USE_BUFFER = true;
 const MIN_MATCH_PROPORTION = 0.2;
 
 const ageMap = {
-    'child': [0, 10],
-    'teen': [10, 22],
-    'adult': [22, 70],
-    'senior': [70, 200]
+    'child': [0, 18],
+    'teen': [18, 30],
+    'adult': [30, 65],
+    'senior': [65, 200]
 }
 
 // cached elements
@@ -29,8 +29,8 @@ const webcamCtx = webcamFrame.getContext('2d', { willReadFrequently: true })
 // Define constraints for the video resolution
 const webcamConstraints = {
     video: {
-        width: { ideal: 640 }, // Ideal width in pixels
-        height: { ideal: 480 }  // Ideal height in pixels
+        width: { ideal: 1280 }, // Ideal width in pixels
+        height: { ideal: 720 }  // Ideal height in pixels
     }
 };
 
