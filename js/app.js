@@ -19,9 +19,11 @@ webcam.autoplay = true;
 const canvas = $('#canvas')
 const canvas_el = canvas.get(0)
 const canvasCtx = canvas_el.getContext('2d', { willReadFrequently: true })
-const initialFrame = $('#initial_frame').get(0)
+const initialFrame = document.createElement('canvas');
 const initialCtx = initialFrame.getContext('2d', { willReadFrequently: true })
-const webcamFrame = $('#webcam_frame').get(0)
+const initialFrameDelayed = document.createElement('canvas');
+const initialCtxDelayed = initialFrame.getContext('2d', { willReadFrequently: true })
+const webcamFrame = document.createElement('canvas');
 const webcamCtx = webcamFrame.getContext('2d', { willReadFrequently: true })
 
 // Define constraints for the video resolution
@@ -56,7 +58,7 @@ if (LOW_QUALITY) {
         scoreThreshold: 0.2,
         nmsRadius: 20,
         internalResolution: 'low',
-    };    
+    };
     segmenterConfig = {
         architecture: "MobileNetV1",
         outputStride: 8,
@@ -105,7 +107,7 @@ if (DEBUG) {
             setInitialPositions();
             setInitialFrame();
             initialized = true;
-        };        
+        };
     }).catch(error => {
         console.error('Error accessing webcam: ', error);
         $('#results').html('Error accessing webcam: ' + error);
@@ -122,6 +124,8 @@ function setInitialPositions() {
     initialFrame.height = videoHeight
     webcamFrame.width = videoWidth
     webcamFrame.height = videoHeight
+    initialFrameDelayed.width = videoWidth
+    initialFrameDelayed.height = videoHeight
     console.log("initialFrame", initialFrame.width, initialFrame.height)
 
     // set canvas width and left position to fit the video position on the fullscreen
@@ -138,12 +142,7 @@ function setInitialPositions() {
 }
 
 function setInitialFrame() {
-    // get real resolution of webcam
-    const videoWidth = webcam.videoWidth
-    const videoHeight = webcam.videoHeight
-
-    // set canvas resolution to webcam size
-    initialCtx.drawImage(webcam, 0, 0, videoWidth, videoHeight)
+    initialCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
 }
 
 ///// SOLUTION FOR RACE DETECTOR: convert webcam frame to tensor
@@ -161,6 +160,11 @@ async function updateResults() {
     // await segmenterDraw()
     const ageValue = ageMap[$('input[name=age]:checked').val()]
     const sexValue = $('input[name=sex]:checked').val()
+
+    // put webcam frame to the canvas
+    webcamCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
+    var webcamData = webcamCtx.getImageData(0, 0, webcam.videoWidth, webcam.videoHeight);
+    
     try {
         await calculateFaces()
     } catch (error) {
@@ -169,14 +173,16 @@ async function updateResults() {
         window.requestAnimationFrame(updateResults);
         return
     }
-    
+
     people = await segmenter.segmentPeople(webcam, segmentationConfig)
-    
+
     // reset initial frame if there are no faces found for a long time (5 seconds)
     if (faces.length == 0) {
-        if (Date.now() - lastTimePerson > 1000) {
+        if (Date.now() - lastTimePerson > 3000) {
             console.log('updating initial frame with empty space')
-            setInitialFrame();
+            initialCtx.drawImage(initialFrameDelayed, 0, 0, webcam.videoWidth, webcam.videoHeight)
+            initialCtxDelayed.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
+            lastTimePerson = Date.now()
         }
     } else {
         lastTimePerson = Date.now()
@@ -198,7 +204,7 @@ async function updateResults() {
                 let box2 = facesBuffer[j].detection.box
                 // count how many pixels overlap
                 let overlap = Math.max(0, Math.min(box1.x + box1.width, box2.x + box2.width) - Math.max(box1.x, box2.x)) *
-                              Math.max(0, Math.min(box1.y + box1.height, box2.y + box2.height) - Math.max(box1.y, box2.y))
+                    Math.max(0, Math.min(box1.y + box1.height, box2.y + box2.height) - Math.max(box1.y, box2.y))
                 let proportion = overlap / (box1.width * box1.height)
                 if (proportion > MIN_MATCH_PROPORTION && proportion > newFace.bufferProb) {
                     newFace.bufferProb = proportion
@@ -231,10 +237,6 @@ async function updateResults() {
     // clear drawing context
     canvasCtx.clearRect(0, 0, canvas_el.width, canvas_el.height);
 
-    // put webcam frame to the canvas
-    webcamCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
-    var webcamData = webcamCtx.getImageData(0, 0, webcam.videoWidth, webcam.videoHeight);
-    
     // TODO we can do it once in setInitialFrame
     var initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
     var data = initialFrameData.data;
@@ -250,7 +252,7 @@ async function updateResults() {
         y = Math.round(y)
         width = Math.round(width)
         height = Math.round(height)
-    
+
         // loop through people segmentation to match the face box with the person mask
         for (let i = 0; i < people.length; i++) {
             const person = people[i]
@@ -280,36 +282,44 @@ async function updateResults() {
             // if there is no segmentation mask for the face, set from the buffer
             face.segmentation = face.bufferFace ? face.bufferFace.segmentation : null
         }
-        
+
         // do we need to exclude the person from the image
-        let drawBool = face.segmentation && 
-                       ageValue[0] < face.age && 
-                       ageValue[1] > face.age && 
-                       sexValue == face.gender
+        let drawBool = face.segmentation &&
+            ageValue[0] < face.age &&
+            ageValue[1] > face.age &&
+            sexValue == face.gender
 
         if (drawBool) {
             const segmentData = face.segmentation.mask.mask.data;
-            const foregroundColor = {r: 255, g: 255, b: 255, a: 255};
-            const backgroundColor = {r: 0, g: 0, b: 0, a: 0};
-    
+            const foregroundColor = { r: 255, g: 255, b: 255, a: 255 };
+            const backgroundColor = { r: 0, g: 0, b: 0, a: 0 };
+
             // instead of drawMask we copy pixel by pixel the initial frame for masked pixels
             let coloredPartImage = await bodySegmentation.toBinaryMask(face.segmentation, foregroundColor, backgroundColor);
 
             for (let i = 0; i < segmentData.length; i += 4) {
-                if (coloredPartImage.data[i + 3] !== 0) {
+                let count = 0;
+                let steps = 10;
+                count += coloredPartImage.data[i + 3] > 0 ? 1 : 0;
+                count += coloredPartImage.data[i + 3 - coloredPartImage.width * 4 * steps] > 0 ? 1 : 0;
+                count += coloredPartImage.data[i + 3 + coloredPartImage.width * 4 * steps] > 0 ? 1 : 0;
+                count += coloredPartImage.data[i + 3 + 4 * steps] > 0 ? 1 : 0;
+                count += coloredPartImage.data[i + 3 - 4 * steps] > 0 ? 1 : 0;
+
+                if (count !== 0) {
                     if (USE_WEBCAM_CANVAS) {
-                        webcamData.data[i]     = data[i];     // red
+                        webcamData.data[i] = data[i];     // red
                         webcamData.data[i + 1] = data[i + 1]; // green
                         webcamData.data[i + 2] = data[i + 2]; // blue
                         webcamData.data[i + 3] = data[i + 3]; // alpha
                     } else {
-                        coloredPartImage.data[i]     = data[i];     // red
+                        coloredPartImage.data[i] = data[i];     // red
                         coloredPartImage.data[i + 1] = data[i + 1]; // green
                         coloredPartImage.data[i + 2] = data[i + 2]; // blue
                         coloredPartImage.data[i + 3] = data[i + 3]; // alpha
                     }
                 } else {
-                    if (USE_WEBCAM_CANVAS) {} else {
+                    if (!USE_WEBCAM_CANVAS) {
                         // transparent
                         coloredPartImage.data[i] = 0;
                         coloredPartImage.data[i + 1] = 0;
@@ -374,13 +384,11 @@ async function run() {
     }
 
     $('#navbar').append('')
-    
+
     /* BodyPix segmenter */
     await loadSegmenter()
 
-    // start processing image
-    // setTimeout(setInitialPositions, 1000)
-    // setTimeout(setInitialFrame, 2000) // give time to webcam auto adjust brightness
+    // start processing
     updateResults();
 }
 
@@ -416,13 +424,13 @@ function drawBox(canvas, result_resized, withScore = false) {
     ctx.strokeStyle = 'red'
     ctx.stroke()
 
-    if (!result_resized.prob) 
+    if (!result_resized.prob)
         result_resized.prob = 0.0
 
     if (withScore) {
-        const text = result_resized.gender + ', ' 
-            + result_resized.race + ', ' 
-            + result_resized.age.toFixed(0) + ' years, score: ' 
+        const text = result_resized.gender + ', '
+            + result_resized.race + ', '
+            + result_resized.age.toFixed(0) + ' years, score: '
             + result_resized.prob.toFixed(2);
         const { width, actualBoundingBoxAscent, actualBoundingBoxDescent } = ctx.measureText(text)
         ctx.fillStyle = 'red'
