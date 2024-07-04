@@ -27,8 +27,8 @@ const webcamCtx = webcamFrame.getContext('2d', { willReadFrequently: true })
 // Define constraints for the video resolution
 const webcamConstraints = {
     video: {
-        width: { ideal: 1280 }, // Ideal width in pixels
-        height: { ideal: 720 }  // Ideal height in pixels
+        width: { ideal: 640 }, // Ideal width in pixels
+        height: { ideal: 480 }  // Ideal height in pixels
     }
 };
 
@@ -69,9 +69,10 @@ if (LOW_QUALITY) {
         segmentBodyParts: false,
         flipHorizontal: false,
         maxDetections: 10,
-        scoreThreshold: 0.1,
+        scoreThreshold: 0.05,
         nmsRadius: 20,
         internalResolution: 'full',
+        refineSteps: 20,
     };
     segmenterConfig = {
         architecture: "ResNet50",
