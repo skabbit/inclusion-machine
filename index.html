@@ -2,85 +2,60 @@
 <html lang="en-US">
 
 <head>
-  <meta charset="utf-8" />
-  <title>TensorFlow.js browser example</title>
+    <meta charset="utf-8" />
+    <title>Inclusion machine (2024) by Alexey Shulgin and Alexander Serechenko</title>
 
-  <!-- Load TensorFlow.js from a script tag -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-  <script src="/face-api.js/dist/face-api.js"></script>
-  <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <!-- Require the peer dependencies of body-segmentation. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+
+    <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.20.0/dist/tf-backend-wasm.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/selfie-segmentation"></script> -->
+
+    <!-- Load TensorFlow.js from a script tag -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.js"></script> -->
+    <script src="https://unpkg.dev/@vladmandic/face-api/dist/face-api.js"></script>
+
+    <!-- <script src="/face-api.js/dist/face-api.js"></script> -->
+    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2" crossorigin="anonymous"
+        type="module"></script>
+
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
 </head>
 
 <body>
-  <h1>TensorFlow.js example</h1>
-  <h2>Open the console to see the results.</h2>
+    <div class="fullscreen" id="fullscreen">
+        <video id="webcam" autoplay playsinline muted style="border: 0px; visibility: hidden;"></video>
+        <canvas id="canvas" style="border: 0px;"></canvas>
+    </div>
+    <div class="" id="navbar">
+        <br/>
+        <input type="radio" class="radio" value="male" name="sex" id="male" checked/><label for="male">Мужской</label><br/>
+        <input type="radio" class="radio" value="female" name="sex" id="female"/><label for="female">Женский</label><br/>
+        <br/>
+        <input type="radio" class="radio" value="child" name="age" id="child"/><label for="child">Ребенок</label><br/>
+        <input type="radio" class="radio" value="teen" name="age" id="teen"/><label for="teen">Молодой</label><br/>
+        <input type="radio" class="radio" value="adult" name="age" id="adult" checked/><label for="adult">Взрослый</label><br/>
+        <input type="radio" class="radio" value="senior" name="age" id="senior"/><label for="senior">Зрелый</label><br/>
+        <br/>
+    
+        <button onclick="testPerformance()">test performance</button><br/>
+        <button onclick="updateResults()">UPDATE FRAME</button><br/>
+        <button onclick="stopAll()">STOP IT!</button><br/>
+    </div>
 
-  <canvas id="canvas1" width="224" height="224" style="border: 2px solid;"></canvas>
+    <div id="results">
+    </div>
 
-  <script>
-    const canvas1 = document.getElementById('canvas1');
-
-    // for example
-    const SIZE = 224;
-    const im = new Image()
-    im.src = "face.png";
-
-    // load trained mobilenet
-    const model_race = tf.loadLayersModel('./racejs/model.json');
-    model = undefined;
-    model_race.then(m => model = m);
-
-    function start() {
-      console.time("Loading Time");
-      example = tf.browser.fromPixels(im, 3);
-      tf.browser.toPixels(example.toFloat().div(tf.scalar(255.)), canvas1);
-      example = tf.image.resizeBilinear(example.expandDims(0), [SIZE, SIZE]).toFloat();
-      console.timeEnd("Loading Time");
-
-      console.time("Prediction Time");
-      prediction = model.predict(example);
-      console.log(prediction);
-      console.timeEnd("Prediction Time");
-
-      // convert webcam frame to tensor
-      input_frame = tf.browser.fromPixels(webcam, 3);
-      // input_frame = tf.image.resizeBilinear(input_frame, [SIZE, SIZE]).toFloat();
-      tf.browser.toPixels(input_frame.toFloat().div(tf.scalar(255.)), canvas1);
-      input_frame = input_frame.expandDims(0);
-
-    }
-
-    // capture webcam frame
-    const webcam = document.createElement('video');
-    webcam.width = SIZE;
-    webcam.height = SIZE;
-    webcam.autoplay = true;
-    document.body.appendChild(webcam);
-    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-      webcam.srcObject = stream;
-    });
-
-
-
-    /*
-    links:
-    https://github.com/6chaoran/TFjs-BMI-prediction/blob/main/index.js
-    https://github.com/serengil/deepface_models/releases/
-    https://github.com/tensorflow/tfjs-examples
-    resize and preview examples: https://humorous-silky-hacksaw.glitch.me/
-
-    performance of tensorflow.js:
-    https://www.reddit.com/r/MachineLearning/comments/azwrcd/d_what_is_the_performance_like_in_tensorflowjs_vs/
-      For 1024x1024 matmul I get
-      40 gflops with tensorflow.js and
-      330 gflops with real tensorflow
-    */
-
-
-  </script>
-
-  <button onclick="start()">Start</button>
+    <script src="/js/app.js"></script>
+    <script src="/js/faceapi.js"></script>
+    <!-- <script src="/js/race.js"></script> -->
+    <!-- <script src="/js/imagesegmenter.js"></script> -->
 
 </body>
-
 </html>

@@ -1,5 +1,5 @@
 // configuration variables
-const DEBUG = false;
+const DEBUG = true;
 const LOW_QUALITY = true;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
 const USE_WEBCAM_CANVAS = true;
@@ -106,10 +106,11 @@ if (DEBUG) {
     webcam.src = 'gray-cake-1.mov';
     webcam.loop = true;
     webcam.play();
-    // $('#webcam_frame').css('visibility', 'show');
-    setInitialPositions();
-    setInitialFrame();
-    initialized = true;
+    webcam.onloadedmetadata = () => {
+        setInitialPositions();
+        setInitialFrame();
+        initialized = true;
+    };
 } else {
     // capture webcam frame
     navigator.mediaDevices.getUserMedia(webcamConstraints).then(stream => {
@@ -155,6 +156,7 @@ function setInitialPositions() {
 
 function setInitialFrame() {
     initialCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
+    initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
 }
 
 ///// SOLUTION FOR RACE DETECTOR: convert webcam frame to tensor
@@ -208,7 +210,6 @@ async function updateResults() {
         lastTimePerson = Date.now()
     }
 
-    timeStart = performance.now();
     // check buffer and compare with current
     if (USE_BUFFER) {
         newFaces = faces
@@ -254,7 +255,6 @@ async function updateResults() {
     } else {
         allFaces = faces
     }
-    performanceTimes['check buffer'] = performance.now() - timeStart
 
     // clear drawing context
     timeStart = performance.now();
@@ -391,7 +391,10 @@ async function updateResults() {
             text = 'fps: ' + 1000 / (Date.now() - previousFrameTime)
             text += '<br> persons: ' + facesBuffer.length
             // add performance times results
-            text += 
+            text += '<br> performance times: ';
+            for (const [key, value] of Object.entries(performanceTimes)) {
+                text += key + ': ' + value.toFixed(2) + 'ms <br>'
+            }
             $('#results').html(text)
         }
         previousFrameTime = Date.now()
