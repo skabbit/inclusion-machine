@@ -1,6 +1,7 @@
 // configuration variables
 const DEBUG = false;
-const LOW_QUALITY = false;
+const LOW_QUALITY = true;
+const SHOW_INFO = false;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
 const USE_WEBCAM_CANVAS = true;
 const USE_BUFFER = true;
@@ -96,6 +97,14 @@ if (LOW_QUALITY) {
     };
 }
 
+// audio setup
+const mp3_files = ['welcome', 'male', 'female', 'child', 'teen', 'adult', 'senior']
+let audio_files = {}
+for (let i = 0; i < mp3_files.length; i++) {
+    audio_files[mp3_files[i]] = new Audio('mp3/' + mp3_files[i] + '.mp3');
+}
+let lastTimeAudioPlayed = new Date(2020, 1, 1); // far past
+
 
 if (DEBUG) {
     //// video file for debug:
@@ -175,6 +184,11 @@ async function updateResults() {
     // await segmenterDraw()
     const ageValue = ageMap[$('input[name=age]:checked').val()]
     const sexValue = $('input[name=sex]:checked').val()
+
+    if (Date.now() - lastTimeAudioPlayed > 20000) {
+        audio_files['welcome'].play();
+        lastTimeAudioPlayed = Date.now();
+    }
 
     // put webcam frame to the canvas
     timeStart = performance.now();
@@ -395,7 +409,8 @@ async function updateResults() {
             for (const [key, value] of Object.entries(performanceTimes)) {
                 text += key + ': ' + value.toFixed(2) + 'ms <br>'
             }
-            $('#results').html(text)
+            if (SHOW_INFO)
+                $('#results').html(text)
         }
         previousFrameTime = Date.now()
     }
@@ -471,6 +486,20 @@ $(document).ready(function () {
         var name = $(this).attr('name');
         $('#navbar-bootstrap .btn-check[name=' + name + ']').attr('disabled', false);
         $(this).attr('disabled', true);
+    });
+
+    $('#navbar-bootstrap .btn-check, #navbar input').click(function () {
+        // disable this
+        var value = $(this).attr('value');
+        audio_files[value].play();
+        lastTimeAudioPlayed = Date.now();
+    });
+
+    /* if escape key pressed then stop */
+    $(document).keyup(function (e) {
+        if (e.key === "Escape") {
+            stopAll();
+        }
     });
 })
 
