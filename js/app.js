@@ -83,11 +83,11 @@ if (LOW_QUALITY) {
         multiSegmentation: true,
         segmentBodyParts: false,
         flipHorizontal: false,
-        maxDetections: 10,
+        maxDetections: 5,
         scoreThreshold: 0.05,
         nmsRadius: 20,
-        internalResolution: 'full',
-        refineSteps: 20,
+        internalResolution: 'medium',
+        refineSteps: 5,
     };
     segmenterConfig = {
         architecture: "ResNet50",
@@ -402,10 +402,10 @@ async function updateResults() {
         if (previousFrameTime) {
             // put fps info the results div
             // console.log('fps', 1000 / (Date.now() - lastTime))
-            text = 'fps: ' + 1000 / (Date.now() - previousFrameTime)
-            text += '<br> persons: ' + facesBuffer.length
+            text = '<b>fps</b>: ' + 1000 / (Date.now() - previousFrameTime)
+            text += '<br><b>persons</b>: ' + facesBuffer.length
             // add performance times results
-            text += '<br> performance times: ';
+            text += '<br><b>performance times:</b> <br>';
             for (const [key, value] of Object.entries(performanceTimes)) {
                 text += key + ': ' + value.toFixed(2) + 'ms <br>'
             }
