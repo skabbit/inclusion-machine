@@ -1,3 +1,10 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background-color: black;
+}
+
 #results {
     position: absolute;
     top: 0;
@@ -57,9 +64,30 @@
     font-size: 20px;
     line-height: 50px;
     vertical-align: baseline;
+    color: black;
 }
 
 /* label next to checked input */
 #navbar input:checked + label {
-    color: red;
+    color: gray;
+    text-decoration: line-through;
+}
+
+h1 {
+    font-size: 10em;
+    margin: auto;
+    padding: 0;
+    text-align: center;
+    width: 40%;
+}
+
+#navbar-bootstrap {
+    text-align: right;
+    padding: 20px;
+}
+
+/* strike disabled */
+#navbar-bootstrap input:checked + label {
+    color: black;
+    text-decoration: line-through;
 }

@@ -1,6 +1,6 @@
 // configuration variables
-const DEBUG = true;
-const LOW_QUALITY = true;
+const DEBUG = false;
+const LOW_QUALITY = false;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
 const USE_WEBCAM_CANVAS = true;
 const USE_BUFFER = true;
@@ -466,5 +466,11 @@ function stopAll() {
 
 $(document).ready(function () {
     run();
+    $('#navbar-bootstrap .btn-check').click(function () {
+        // disable this
+        var name = $(this).attr('name');
+        $('#navbar-bootstrap .btn-check[name=' + name + ']').attr('disabled', false);
+        $(this).attr('disabled', true);
+    });
 })
 
