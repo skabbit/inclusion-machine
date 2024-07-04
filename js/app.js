@@ -91,7 +91,10 @@ if (DEBUG) {
     webcam.src = 'gray-cake-1.mov';
     webcam.loop = true;
     webcam.play();
-    $('#webcam_frame').css('visibility', 'show');
+    // $('#webcam_frame').css('visibility', 'show');
+    setInitialPositions();
+    setInitialFrame();
+    initialized = true;
 } else {
     // capture webcam frame
     navigator.mediaDevices.getUserMedia(webcamConstraints).then(stream => {
