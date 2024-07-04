@@ -176,8 +176,8 @@ async function updateResults() {
 
     people = await segmenter.segmentPeople(webcam, segmentationConfig)
 
-    // reset initial frame if there are no faces found for a long time (5 seconds)
-    if (faces.length == 0) {
+    // reset initial frame if there are no people found for a long time (5 seconds)
+    if (people.length == 0) {
         if (Date.now() - lastTimePerson > 3000) {
             console.log('updating initial frame with empty space')
             initialCtx.drawImage(initialFrameDelayed, 0, 0, webcam.videoWidth, webcam.videoHeight)
