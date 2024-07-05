@@ -91,7 +91,7 @@ if (LOW_QUALITY) {
         multiSegmentation: true,
         segmentBodyParts: false,
         flipHorizontal: false,
-        maxDetections: 5,
+        maxDetections: 10,
         scoreThreshold: 0.05,
         nmsRadius: 20,
         internalResolution: 'full',

@@ -6,7 +6,7 @@ let optionsTinyFace = new faceapi.TinyFaceDetectorOptions({
     scoreThreshold: 0.2 })
 let optionsSSDMobileNet = new faceapi.SsdMobilenetv1Options({
     minConfidence: 0.2,
-    maxResults: 5 });
+    maxResults: 10 });
 
 async function calculateFaces(webcamCanvas) {
     let results;
