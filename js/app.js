@@ -94,7 +94,7 @@ if (LOW_QUALITY) {
         maxDetections: 5,
         scoreThreshold: 0.05,
         nmsRadius: 20,
-        internalResolution: 'medium',
+        internalResolution: 'full',
         refineSteps: 5,
     };
     segmenterConfig = {
@@ -191,10 +191,10 @@ async function updateResults() {
         return
     }
 
-    // if (Date.now() - lastTimeAudioPlayed > 20000) {
-    //     audio_files['welcome'].play();
-    //     lastTimeAudioPlayed = Date.now();
-    // }
+    if (Date.now() - lastTimeAudioPlayed > 20000) {
+        audio_files['welcome'].play();
+        lastTimeAudioPlayed = Date.now();
+    }
 
     // put webcam frame to the canvas
     timeStart = performance.now();
@@ -229,10 +229,10 @@ async function updateResults() {
         }
     } else {
         lastTimePerson = Date.now()
-        if (noPerson) {
-            audio_files['welcome'].play();
-            noPerson = false;
-        }
+        // if (noPerson) {
+        //     audio_files['welcome'].play();
+        //     noPerson = false;
+        // }
     }
 
     // check buffer and compare with current
@@ -341,6 +341,10 @@ async function updateResults() {
 
             // instead of drawMask we copy pixel by pixel the initial frame for masked pixels
             let coloredPartImage = await bodySegmentation.toBinaryMask(face.segmentation, foregroundColor, backgroundColor);
+            let bufferedPartImage = null;
+            // use previous frame to smooth segmentation artefacts
+            if (face.bufferFace && face.bufferFace.segmentation)
+                bufferedPartImage = await bodySegmentation.toBinaryMask(face.bufferFace.segmentation, foregroundColor, backgroundColor);
 
             for (let i = 0; i < segmentData.length; i += 4) {
                 let count = 0;
@@ -350,6 +354,15 @@ async function updateResults() {
                 count += coloredPartImage.data[i + 3 + coloredPartImage.width * 4 * steps] > 0 ? 1 : 0;
                 count += coloredPartImage.data[i + 3 + 4 * steps] > 0 ? 1 : 0;
                 count += coloredPartImage.data[i + 3 - 4 * steps] > 0 ? 1 : 0;
+
+                // count previous frame to smooth segmentation artefacts
+                if (bufferedPartImage) {
+                    count += bufferedPartImage.data[i + 3] > 0 ? 1 : 0;
+                    count += bufferedPartImage.data[i + 3 - bufferedPartImage.width * 4 * steps] > 0 ? 1 : 0;
+                    count += bufferedPartImage.data[i + 3 + bufferedPartImage.width * 4 * steps] > 0 ? 1 : 0;
+                    count += bufferedPartImage.data[i + 3 + 4 * steps] > 0 ? 1 : 0;
+                    count += bufferedPartImage.data[i + 3 - 4 * steps] > 0 ? 1 : 0;
+                }
 
                 if (count !== 0) {
                     if (USE_WEBCAM_CANVAS) {
