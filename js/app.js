@@ -1,11 +1,17 @@
 // configuration variables
-const DEBUG = false;
-const LOW_QUALITY = false;
-const SHOW_INFO = false;
+let DEBUG = false;
+let LOW_QUALITY = false;
+let SHOW_INFO = false;
 // draw full canvas with webcam data, or draw only masked parts on top of the webcam video element
-const USE_WEBCAM_CANVAS = true;
-const USE_BUFFER = true;
-const MIN_MATCH_PROPORTION = 0.2;
+let USE_WEBCAM_CANVAS = true;
+let USE_BUFFER = true;
+let MIN_MATCH_PROPORTION = 0.2;
+
+if (window.location.href.includes('localhost')) {
+    DEBUG = true;
+    LOW_QUALITY = true;
+    SHOW_INFO = true;
+}
 
 const ageMap = {
     'child': [0, 18],
@@ -55,6 +61,8 @@ let initialized = false;
 const opacity = 1;
 const flipHorizontal = false;
 let lastTimePerson = new Date(2020, 1, 1); // far past
+let noPerson = true;
+let checkedCategories = [];
 
 // performance measures
 let performanceTimes = {};
@@ -98,10 +106,17 @@ if (LOW_QUALITY) {
 }
 
 // audio setup
-const mp3_files = ['welcome', 'male', 'female', 'child', 'teen', 'adult', 'senior']
+const mp3_filenames = ['welcome'];
+for (const age of Object.keys(ageMap)) {
+    for (const gender of ['male', 'female']) {
+        for (const turn of ['off', 'on']) {
+            mp3_filenames.push(turn + '-' + gender + '-' + age);
+        }
+    }
+}
 let audio_files = {}
-for (let i = 0; i < mp3_files.length; i++) {
-    audio_files[mp3_files[i]] = new Audio('mp3/' + mp3_files[i] + '.mp3');
+for (let i = 0; i < mp3_filenames.length; i++) {
+    audio_files[mp3_filenames[i]] = new Audio('mp3/' + mp3_filenames[i] + '.mp3');
 }
 let lastTimeAudioPlayed = new Date(2020, 1, 1); // far past
 
@@ -168,12 +183,6 @@ function setInitialFrame() {
     initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
 }
 
-///// SOLUTION FOR RACE DETECTOR: convert webcam frame to tensor
-// input_frame = tf.browser.fromPixels(webcam, 3);
-// input_frame = tf.image.resizeBilinear(input_frame, [SIZE, SIZE]).toFloat();
-// tf.browser.toPixels(input_frame.toFloat().div(tf.scalar(255.)), canvas);
-// input_frame = input_frame.expandDims(0)
-
 async function updateResults() {
     let timeStart;
     if (!initialized) {
@@ -181,14 +190,11 @@ async function updateResults() {
         setTimeout(updateResults, 1000)
         return
     }
-    // await segmenterDraw()
-    const ageValue = ageMap[$('input[name=age]:checked').val()]
-    const sexValue = $('input[name=sex]:checked').val()
 
-    if (Date.now() - lastTimeAudioPlayed > 20000) {
-        audio_files['welcome'].play();
-        lastTimeAudioPlayed = Date.now();
-    }
+    // if (Date.now() - lastTimeAudioPlayed > 20000) {
+    //     audio_files['welcome'].play();
+    //     lastTimeAudioPlayed = Date.now();
+    // }
 
     // put webcam frame to the canvas
     timeStart = performance.now();
@@ -219,9 +225,14 @@ async function updateResults() {
             initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
             initialCtxDelayed.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
             lastTimePerson = Date.now()
+            noPerson = true;
         }
     } else {
         lastTimePerson = Date.now()
+        if (noPerson) {
+            audio_files['welcome'].play();
+            noPerson = false;
+        }
     }
 
     // check buffer and compare with current
@@ -321,10 +332,7 @@ async function updateResults() {
         }
 
         // do we need to exclude the person from the image
-        let drawBool = face.segmentation &&
-            ageValue[0] < face.age &&
-            ageValue[1] > face.age &&
-            sexValue == face.gender
+        let drawBool = (face.segmentation !== null) && isCategoryExcluded(face.gender, face.age);
 
         if (drawBool) {
             const segmentData = face.segmentation.mask.mask.data;
@@ -433,6 +441,7 @@ async function run() {
     await loadSegmenter()
 
     // start processing
+    updateCheckedCategories();
     updateResults();
 }
 
@@ -479,18 +488,36 @@ function stopAll() {
     stopRequested = true;
 }
 
+function isCategoryExcluded(gender, age) {
+    let result = false;
+    for (let i = 0; i < checkedCategories.length; i++) {
+        let category = checkedCategories[i]
+        let [genderCategory, ageCategory] = category.split('-')
+        let ageMin = ageMap[ageCategory][0]
+        let ageMax = ageMap[ageCategory][1]
+        if (genderCategory == gender && age >= ageMin && age < ageMax) {
+            result = true;
+            break;
+        }
+    }
+    return result;
+}
+
+function updateCheckedCategories() {
+    checkedCategories = []
+    $('input[name=category]:checked').each(function () {
+        checkedCategories.push($(this).val())
+    });
+    console.log('checkedCategories=', checkedCategories);
+}
+
 $(document).ready(function () {
     run();
     $('#navbar-bootstrap .btn-check').click(function () {
-        // disable this
-        var name = $(this).attr('name');
-        $('#navbar-bootstrap .btn-check[name=' + name + ']').attr('disabled', false);
-        $(this).attr('disabled', true);
-    });
-
-    $('#navbar-bootstrap .btn-check, #navbar input').click(function () {
-        // disable this
+        updateCheckedCategories();
         var value = $(this).attr('value');
+        var checked = $(this).prop('checked') ? 'off' : 'on';
+        value = checked + '-' + value
         audio_files[value].play();
         lastTimeAudioPlayed = Date.now();
     });

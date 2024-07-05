@@ -90,3 +90,18 @@ h1 {
     color: black;
     text-decoration: line-through;
 }
+
+/* logo on the left bottom corner of the screen */
+#logo {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    z-index: 100;
+    padding: 10px;
+    background: transparent;
+    text-align: left;
+}
+
+#logo img {
+    width: 15em;
+}
