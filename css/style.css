@@ -82,7 +82,7 @@ h1 {
 
 #navbar-bootstrap {
     text-align: right;
-    padding: 20px;
+    padding: 50px;
 }
 
 /* strike disabled */
@@ -97,7 +97,7 @@ h1 {
     bottom: 0;
     right: 0;
     z-index: 100;
-    padding: 10px;
+    padding: 50px;
     background: transparent;
     text-align: left;
 }
