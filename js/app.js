@@ -7,7 +7,8 @@ let USE_WEBCAM_CANVAS = true;
 let USE_BUFFER = true;
 let MIN_MATCH_PROPORTION = 0.2;
 
-if (NOINTERNET) {
+
+if (typeof NOINTERNET !== 'undefined' && NOINTERNET) {
     // Handle no internet connection
 } else if (window.location.href.includes('localhost')) {
     DEBUG = true;
@@ -117,8 +118,12 @@ for (const age of Object.keys(ageMap)) {
     }
 }
 let audio_files = {}
+let postfix = ''
+if (LANGUAGE == 'eng') {
+    postfix = '-en'
+}
 for (let i = 0; i < mp3_filenames.length; i++) {
-    audio_files[mp3_filenames[i]] = new Audio('mp3/' + mp3_filenames[i] + '.mp3');
+    audio_files[mp3_filenames[i]] = new Audio('mp3/' + mp3_filenames[i] + postfix + '.mp3');
 }
 let lastTimeAudioPlayed = new Date(2020, 1, 1); // far past
 

@@ -25,7 +25,7 @@ async function faceapiInit() {
     // await faceapi.tf.setBackend('wasm');
 
     let loadpath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/'
-    if (NOINTERNET == true) {
+    if (typeof NOINTERNET !== 'undefined' && NOINTERNET) {
         console.log('NOINTERNET')
         loadpath = '/npm/vladmandic'
     }
