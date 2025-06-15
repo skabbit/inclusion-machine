@@ -35,6 +35,7 @@ const initialFrameDelayed = document.createElement('canvas');
 const initialCtxDelayed = initialFrame.getContext('2d', { willReadFrequently: true })
 const webcamCanvas = document.createElement('canvas');
 const webcamCtx = webcamCanvas.getContext('2d', { willReadFrequently: true })
+let backgroundFrameInitialized = false;
 
 // Define constraints for the video resolution
 let webcamConstraints = {
@@ -228,13 +229,32 @@ async function updateResults() {
     if (people.length == 0) {
         if (Date.now() - lastTimePerson > 3000) {
             console.log('updating initial frame with empty space')
-            initialCtx.drawImage(initialFrameDelayed, 0, 0, webcam.videoWidth, webcam.videoHeight)
+            initialCtx.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
             initialFrameData = initialCtx.getImageData(0, 0, initialFrame.width, initialFrame.height);
             initialCtxDelayed.drawImage(webcam, 0, 0, webcam.videoWidth, webcam.videoHeight)
             lastTimePerson = Date.now()
             noPerson = true;
+            backgroundFrameInitialized = true;
+            if ($('.alert').length == 1) {
+                $('.alert').remove();
+            }
         }
     } else {
+        if (backgroundFrameInitialized == false) {
+            if (USE_WEBCAM_CANVAS) {
+                canvasCtx.putImageData(
+                    webcamData,
+                    0, 0,
+                    0, 0, canvas_el.width, canvas_el.height);
+            }
+
+            // show message box that no people should be on a screen
+            if ($('.alert').length == 0) {
+                $('#results').html('<div class="alert alert-danger" role="alert" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; min-width: 300px; text-align: center;">To initialize Inclusion Machine<br>No people should be on a screen</div>');
+            }
+            window.requestAnimationFrame(updateResults);
+            return
+        }
         lastTimePerson = Date.now()
         // if (noPerson) {
         //     audio_files['welcome'].play();
