@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Inclusion machine (2024) by Alexey Shulgin and Alexander Serechenko</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    
+    <!-- Require the peer dependencies of body-segmentation. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+
+    <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.20.0/dist/tf-backend-wasm.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation"></script>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/selfie-segmentation"></script> -->
+
+    <!-- Load TensorFlow.js from a script tag -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.js"></script> -->
+    <script src="https://unpkg.dev/@vladmandic/face-api/dist/face-api.js"></script>
+
+    <!-- <script src="/face-api.js/dist/face-api.js"></script> -->
+    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+       
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+
+</head>
+
+<body>
+    <div class="fullscreen" id="fullscreen">
+        <video id="webcam" autoplay playsinline muted style="border: 0px; visibility: hidden;"></video>
+        <canvas id="canvas" style="border: 0px;"></canvas>
+    </div>
+    <div class="" id="navbar-bootstrap">
+        <div class="btn-group-vertical" role="group" aria-label="Basic checkbox toggle button group">
+            <button type="button" class="btn btn-secondary btn-lg" disabled="">Мужчины</button>
+
+            <input type="checkbox" class="btn-check" name="category" id="male-child" value="male-child" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="male-child">Дети</label>
+
+            <input type="checkbox" class="btn-check" name="category" id="male-teen" value="male-teen" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="male-teen">Молодые</label>
+
+            <input type="checkbox" class="btn-check" name="category" id="male-adult" value="male-adult" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="male-adult">Взрослые</label>
+
+            <input type="checkbox" class="btn-check" name="category" id="male-senior" value="male-senior" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="male-senior">Зрелые</label>
+
+        </div>
+
+        <div class="btn-group-vertical" role="group" aria-label="Basic checkbox toggle button group">
+            <button type="button" class="btn btn-secondary btn-lg" disabled="">Женщины</button>
+
+            <input type="checkbox" class="btn-check" name="category" id="female-child" value="female-child" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="female-child">Дети</label>
+
+            <input type="checkbox" class="btn-check" name="category" id="female-teen" value="female-teen" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="female-teen">Молодые</label>
+
+            <input type="checkbox" class="btn-check" name="category" id="female-adult" value="female-adult" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="female-adult">Взрослые</label>
+
+            <input type="checkbox" class="btn-check" name="category" id="female-senior" value="female-senior" autocomplete="off" checked>
+            <label class="btn btn-light btn-lg" for="female-senior">Зрелые</label>
+        </div>
+
+    </div>
+
+    <div id="results">
+    </div>
+
+    <div id="logo">
+        <img src="/logo.png" alt="Inclusion machine (2024) by Alexey Shulgin and Alexander Serechenko">
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/faceapi.js"></script>
+    <!-- <script src="/js/race.js"></script> -->
+    <!-- <script src="/js/imagesegmenter.js"></script> -->
+
+</body>
+</html>
