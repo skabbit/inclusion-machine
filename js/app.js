@@ -7,7 +7,9 @@ let USE_WEBCAM_CANVAS = true;
 let USE_BUFFER = true;
 let MIN_MATCH_PROPORTION = 0.2;
 
-if (window.location.href.includes('localhost')) {
+if (NOINTERNET) {
+    // Handle no internet connection
+} else if (window.location.href.includes('localhost')) {
     DEBUG = true;
     LOW_QUALITY = true;
     SHOW_INFO = true;

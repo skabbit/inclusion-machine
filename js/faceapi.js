@@ -24,7 +24,11 @@ async function faceapiInit() {
     // await faceapi.tf.setWasmPaths('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.20.0/wasm-out/')
     // await faceapi.tf.setBackend('wasm');
 
-    const loadpath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/'
+    let loadpath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/'
+    if (NOINTERNET == true) {
+        console.log('NOINTERNET')
+        loadpath = '/npm/vladmandic'
+    }
     await faceapi.nets.tinyFaceDetector.load(loadpath)
     await faceapi.nets.ssdMobilenetv1.load(loadpath)
     await faceapi.nets.ageGenderNet.load(loadpath)
